@@ -615,6 +615,42 @@ class MainFlowTests(unittest.TestCase):
                         with self.assertRaisesRegex(ValueError, "expected at least 10"):
                             main.main()
 
+    def test_check_feeds_fails_when_configured_mix_loses_international_articles(self):
+        config = {
+            "deepseek_api_key": "",
+            "deepseek_base_url": "https://api.example.com",
+            "deepseek_model": "model",
+            "deepseek_thinking_mode": "disabled",
+            "feishu_webhook_url": "",
+            "feishu_bot_secret": "",
+            "news_hours": 24,
+            "max_articles": 80,
+            "max_summary_items": 20,
+            "value_score_candidates": 60,
+            "rss_feeds": [
+                "https://www.chinadaily.com.cn/rss/china_rss.xml",
+                "https://www.npr.org/rss/rss.php?id=1001",
+            ],
+        }
+        articles = [
+            main.Article(
+                title=f"Domestic article {index}",
+                link=f"https://www.chinadaily.com.cn/a/{index}",
+                source="China Daily",
+                published_at=None,
+                summary="Summary",
+                feed_url="https://www.chinadaily.com.cn/rss/china_rss.xml",
+            )
+            for index in range(10)
+        ]
+
+        with patch.object(sys, "argv", ["main.py", "--check-feeds"]):
+            with patch.object(main, "load_config", return_value=config):
+                with patch.object(main, "fetch_articles", return_value=articles):
+                    with patch("builtins.print"):
+                        with self.assertRaisesRegex(ValueError, "international"):
+                            main.main()
+
     def test_check_feeds_threshold_respects_small_max_articles(self):
         self.assertEqual(main.minimum_feed_check_articles(5), 5)
         self.assertEqual(main.minimum_feed_check_articles(80), 10)

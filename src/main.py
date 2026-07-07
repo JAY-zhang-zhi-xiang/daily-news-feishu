@@ -335,6 +335,15 @@ def source_priority(article: Article) -> int:
     return 1 if any(hint in combined for hint in DOMESTIC_HINTS) else 0
 
 
+def feed_source_priority(feed_source: str) -> int:
+    return 1 if any(hint in feed_source.lower() for hint in DOMESTIC_HINTS) else 0
+
+
+def feed_sources_have_priority_mix(feed_sources: Iterable[str]) -> bool:
+    priorities = {feed_source_priority(feed_source) for feed_source in feed_sources}
+    return 0 in priorities and 1 in priorities
+
+
 def article_text(article: Article) -> str:
     return f"{article.title} {article.summary} {article.source}".lower()
 
@@ -1018,9 +1027,21 @@ def minimum_feed_check_articles(max_articles: int) -> int:
     return max(1, min(10, max_articles))
 
 
-def validate_feed_check_articles(articles: list[Article], min_articles: int) -> None:
+def validate_feed_check_articles(
+    articles: list[Article],
+    min_articles: int,
+    require_priority_mix: bool = False,
+) -> None:
     if len(articles) < min_articles:
         raise ValueError(f"RSS feed check found {len(articles)} articles; expected at least {min_articles}.")
+    if require_priority_mix:
+        domestic_count = sum(1 for article in articles if source_priority(article))
+        global_count = len(articles) - domestic_count
+        if domestic_count == 0 or global_count == 0:
+            raise ValueError(
+                "RSS feed check did not find both domestic and international articles "
+                f"(domestic: {domestic_count}, international: {global_count})."
+            )
 
 
 def check_deepseek(config: dict) -> None:
@@ -1101,7 +1122,11 @@ def main() -> None:
 
     if args.check_feeds:
         print_feed_check(articles)
-        validate_feed_check_articles(articles, minimum_feed_check_articles(config["max_articles"]))
+        validate_feed_check_articles(
+            articles,
+            minimum_feed_check_articles(config["max_articles"]),
+            require_priority_mix=feed_sources_have_priority_mix(config["rss_feeds"]),
+        )
         return
 
     if not articles:

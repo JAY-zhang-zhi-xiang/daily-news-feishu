@@ -690,12 +690,16 @@ def build_digest_prompt(articles: list[Article], max_summary_items: int) -> str:
     )
 
 
-def build_fallback_digest(articles: list[Article], max_items: int, reason: str | None = None) -> dict:
-    items = []
+def append_fallback_digest_items(
+    items: list[dict],
+    articles: list[Article],
+    max_items: int,
+) -> list[dict]:
+    used_links = {item.get("link") for item in items}
     for article in articles:
         if len(items) >= max_items:
             break
-        if not is_http_url(article.link):
+        if not is_http_url(article.link) or article.link in used_links:
             continue
         summary = article.summary or "\u6682\u65e0\u6458\u8981\u3002"
         items.append(
@@ -708,6 +712,13 @@ def build_fallback_digest(articles: list[Article], max_items: int, reason: str |
                 "link": article.link,
             }
         )
+        used_links.add(article.link)
+    return items
+
+
+def build_fallback_digest(articles: list[Article], max_items: int, reason: str | None = None) -> dict:
+    items: list[dict] = []
+    append_fallback_digest_items(items, articles, max_items)
 
     overview = "\u81ea\u52a8\u89e3\u8bfb\u6ca1\u8dd1\u6210\uff0c\u5148\u628a\u6293\u5230\u7684\u91cd\u8981\u65b0\u95fb\u5217\u51fa\u6765\uff0c\u522b\u5148\u88ab\u6807\u9898\u5e26\u7740\u8d70\u3002"
     if reason:
@@ -758,6 +769,7 @@ def parse_digest_response(text: str, fallback_articles: list[Article], max_items
 
     if not items:
         return build_fallback_digest(fallback_articles, max_items)
+    append_fallback_digest_items(items, fallback_articles, max_items)
 
     overview = clean_text(str(data.get("overview", ""))) or "\u4eca\u5929\u7684\u65b0\u95fb\u4e3b\u8981\u770b\u4e24\u4ef6\u4e8b\uff1a\u54ea\u4e9b\u771f\u53d1\u751f\u4e86\uff0c\u54ea\u4e9b\u53ea\u662f\u5404\u65b9\u5728\u62a2\u8bdd\u7b52\u3002"
     return {

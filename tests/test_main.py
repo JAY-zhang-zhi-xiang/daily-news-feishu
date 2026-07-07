@@ -470,6 +470,41 @@ class DigestParsingTests(unittest.TestCase):
         self.assertEqual(digest["items"][0]["source"], "Trusted Source")
         self.assertEqual(digest["items"][0]["value_score"], "4.2/5")
 
+    def test_digest_parser_fills_invalid_model_items_from_fallback_articles(self):
+        first = self.article(link="https://example.com/real-1", source="Source 1", value_score=4.7)
+        second = self.article(link="https://example.com/real-2", source="Source 2", value_score=3.5)
+        second.title = "Fallback second title"
+        second.summary = "Fallback second summary"
+        text = """
+        {
+          "overview": "overview",
+          "items": [
+            {
+              "title": "Rewritten first title",
+              "summary": "Rewritten first summary",
+              "why": "Watch this",
+              "value_score": "1/5",
+              "source": "Spoofed source",
+              "link": "https://example.com/real-1"
+            },
+            {
+              "title": "Injected title",
+              "summary": "Injected summary",
+              "why": "Injected why",
+              "value_score": "5/5",
+              "source": "Injected source",
+              "link": "https://evil.example/phishing"
+            }
+          ]
+        }
+        """
+
+        digest = main.parse_digest_response(text, [first, second], max_items=2)
+
+        self.assertEqual([item["link"] for item in digest["items"]], ["https://example.com/real-1", "https://example.com/real-2"])
+        self.assertEqual(digest["items"][0]["title"], "Rewritten first title")
+        self.assertEqual(digest["items"][1]["title"], "Fallback second title")
+
 
 class ArticleSelectionTests(unittest.TestCase):
     def article(self, index, published_at=None):

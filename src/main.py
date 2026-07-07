@@ -137,6 +137,15 @@ def is_http_url(value: str) -> bool:
     return parsed.scheme in {"http", "https"} and bool(parsed.netloc)
 
 
+def is_secure_api_base_url(value: str) -> bool:
+    parsed = urlparse(value)
+    if parsed.scheme == "https" and parsed.netloc:
+        return True
+    if parsed.scheme == "http" and parsed.hostname in {"localhost", "127.0.0.1", "::1"}:
+        return True
+    return False
+
+
 def is_feishu_webhook_url(value: str) -> bool:
     parsed = urlparse(value)
     return (
@@ -186,8 +195,8 @@ def load_config(
         if invalid_feeds:
             raise ValueError(f"RSS_FEEDS contains invalid URL(s): {', '.join(invalid_feeds[:3])}")
     if require_deepseek:
-        if not is_http_url(config["deepseek_base_url"]):
-            raise ValueError("DEEPSEEK_BASE_URL must be an http(s) URL.")
+        if not is_secure_api_base_url(config["deepseek_base_url"]):
+            raise ValueError("DEEPSEEK_BASE_URL must be an HTTPS URL unless it points to localhost.")
         if not config["deepseek_model"]:
             raise ValueError("DEEPSEEK_MODEL must not be empty.")
         if config["deepseek_thinking_mode"] not in {"enabled", "disabled"}:

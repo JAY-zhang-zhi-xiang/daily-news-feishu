@@ -147,6 +147,29 @@ class ConfigTests(unittest.TestCase):
                 }
             )
 
+    def test_remote_deepseek_base_url_must_use_https(self):
+        with self.assertRaisesRegex(ValueError, "DEEPSEEK_BASE_URL"):
+            self.load_config_with_env(
+                {
+                    "DEEPSEEK_API_KEY": "sk-real",
+                    "DEEPSEEK_BASE_URL": "http://api.example.com",
+                    "FEISHU_WEBHOOK_URL": "https://open.feishu.cn/open-apis/bot/v2/hook/real-token",
+                    "RSS_FEEDS": "https://example.com/rss.xml",
+                }
+            )
+
+    def test_local_deepseek_base_url_may_use_http(self):
+        config = self.load_config_with_env(
+            {
+                "DEEPSEEK_API_KEY": "sk-real",
+                "DEEPSEEK_BASE_URL": "http://127.0.0.1:8000",
+                "FEISHU_WEBHOOK_URL": "https://open.feishu.cn/open-apis/bot/v2/hook/real-token",
+                "RSS_FEEDS": "https://example.com/rss.xml",
+            }
+        )
+
+        self.assertEqual(config["deepseek_base_url"], "http://127.0.0.1:8000")
+
     def test_deepseek_only_check_ignores_unrelated_news_and_feishu_config(self):
         config = self.load_config_with_env(
             {

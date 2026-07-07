@@ -27,6 +27,7 @@ DEEPSEEK_MAX_TOKENS = 12000
 RSS_TIMEOUT_SECONDS = 12
 RSS_RETRIES = 2
 RSS_FETCH_WORKERS = 8
+UNDATED_ARTICLE_FALLBACK_LIMIT = 8
 AUTH_ERROR_STATUS_CODES = {401, 403}
 FEISHU_WEBHOOK_HOSTS = {"open.feishu.cn", "open.larksuite.com"}
 REQUEST_HEADERS = {
@@ -503,7 +504,8 @@ def fetch_articles(feed_sources: Iterable[str], since_hours: int, max_articles: 
                 print(f"Warning: failed to load feed {feed_url}: {exc}")
 
     deduped = deduplicate_articles(articles)
-    return select_balanced_articles(deduped, max_articles)
+    recent_candidates = limit_undated_articles(deduped, max_articles)
+    return select_balanced_articles(recent_candidates, max_articles)
 
 
 def deduplicate_articles(articles: Iterable[Article]) -> list[Article]:
@@ -516,6 +518,19 @@ def deduplicate_articles(articles: Iterable[Article]) -> list[Article]:
         seen.add(normalized_title)
         result.append(article)
     return result
+
+
+def limit_undated_articles(articles: list[Article], max_articles: int) -> list[Article]:
+    dated_articles = [article for article in articles if article.published_at]
+    undated_articles = [article for article in articles if not article.published_at]
+    if not dated_articles or not undated_articles:
+        return articles
+
+    allowed_undated = min(
+        len(undated_articles),
+        max(1, min(UNDATED_ARTICLE_FALLBACK_LIMIT, max_articles // 10)),
+    )
+    return dated_articles + undated_articles[:allowed_undated]
 
 
 def build_value_score_prompt(articles: list[Article]) -> str:

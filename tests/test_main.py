@@ -471,6 +471,35 @@ class DigestParsingTests(unittest.TestCase):
         self.assertEqual(digest["items"][0]["value_score"], "4.2/5")
 
 
+class ArticleSelectionTests(unittest.TestCase):
+    def article(self, index, published_at=None):
+        return main.Article(
+            title=f"Article {index}",
+            link=f"https://example.com/{index}",
+            source="Example",
+            published_at=published_at,
+            summary="Summary",
+            feed_url="https://example.com/rss.xml",
+        )
+
+    def test_undated_articles_are_limited_when_dated_articles_exist(self):
+        dated = [
+            self.article(index, published_at=main.datetime(2026, 7, 7, tzinfo=main.UTC8))
+            for index in range(2)
+        ]
+        undated = [self.article(index + 100) for index in range(20)]
+
+        limited = main.limit_undated_articles(dated + undated, max_articles=80)
+
+        self.assertEqual(len([article for article in limited if article.published_at]), 2)
+        self.assertEqual(len([article for article in limited if not article.published_at]), 8)
+
+    def test_all_undated_articles_are_kept_for_date_less_feeds(self):
+        undated = [self.article(index) for index in range(12)]
+
+        self.assertEqual(main.limit_undated_articles(undated, max_articles=80), undated)
+
+
 class MainFlowTests(unittest.TestCase):
     def test_check_config_validates_delivery_config_without_network_or_send(self):
         config = {

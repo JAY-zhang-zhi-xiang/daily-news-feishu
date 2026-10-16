@@ -17,7 +17,9 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = [
-    "coverage>=7.0",
+    # [toml] lets coverage read [tool.coverage] from this file on Python 3.10,
+    # which predates the stdlib tomllib module.
+    "coverage[toml]>=7.0",
 ]
 
 [project.scripts]

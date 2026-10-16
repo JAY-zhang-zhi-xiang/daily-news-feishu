@@ -27,7 +27,9 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
-          pip install coverage
+          # Python 3.10 has no stdlib tomllib; coverage needs the toml extra to
+          # read [tool.coverage] from pyproject.toml on that version.
+          pip install "coverage[toml]"
 
       - name: Byte-compile sources
         run: python -m py_compile src/main.py tests/test_main.py

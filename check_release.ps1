@@ -99,9 +99,93 @@ function Test-LockedRequirementsInstalled {
     }
 }
 
+function Get-SecretScanExclusions {
+    return @(
+        ".env", ".env.local", ".env.*.local",
+        ".git", ".venv", "data",
+        "__pycache__", "*.pyc", "*.log"
+    )
+}
+
+function Invoke-RipgrepSecretScan {
+    param([string]$Pattern)
+
+    if (-not (Get-Command rg -ErrorAction SilentlyContinue)) {
+        return $null
+    }
+
+    $rgArgs = @("--hidden", "-n")
+    foreach ($glob in (Get-SecretScanExclusions)) {
+        $rgArgs += "--glob"
+        $rgArgs += "!$glob"
+    }
+    $rgArgs += $Pattern
+
+    $matches = & rg @rgArgs
+    $exitCode = $LASTEXITCODE
+    if ($exitCode -eq 0) {
+        return @($matches)
+    }
+    if ($exitCode -eq 1) {
+        return @()
+    }
+    throw "Sensitive value scan failed (rg exited with code $exitCode)."
+}
+
+function Invoke-NativeSecretScan {
+    param([string]$Pattern)
+
+    # Fallback when ripgrep is not installed: scan tracked project files with
+    # PowerShell's own regex engine so the release check still completes.
+    $excludedDirs = @(".git", ".venv", "data", "__pycache__")
+    $excludedFiles = @(".env", ".env.local")
+    $excludedExtensions = @(".pyc", ".log")
+
+    $files = Get-ChildItem -Path $script:projectRoot -Recurse -File -ErrorAction SilentlyContinue |
+        Where-Object {
+            $relative = $_.FullName.Substring($script:projectRoot.Length).TrimStart('\', '/')
+            $segments = $relative -split '[\\/]'
+            $inExcludedDir = $false
+            foreach ($segment in $segments) {
+                if ($excludedDirs -contains $segment) { $inExcludedDir = $true; break }
+            }
+            if ($inExcludedDir) { return $false }
+            if ($excludedFiles -contains $_.Name) { return $false }
+            if ($excludedExtensions -contains $_.Extension) { return $false }
+            return $true
+        }
+
+    $hits = @()
+    foreach ($file in $files) {
+        $lineNumber = 0
+        foreach ($line in (Get-Content -LiteralPath $file.FullName -ErrorAction SilentlyContinue)) {
+            $lineNumber++
+            if ($line -match $Pattern) {
+                $relative = $file.FullName.Substring($script:projectRoot.Length).TrimStart('\', '/')
+                $hits += "${relative}:${lineNumber}:$line"
+            }
+        }
+    }
+    return $hits
+}
+
+function Find-CommittedSecrets {
+    param([string]$Pattern)
+
+    # Prefer ripgrep when available (faster, honours .gitignore-style globs);
+    # otherwise degrade to a native scan instead of failing the whole check.
+    if (Get-Command rg -ErrorAction SilentlyContinue) {
+        return @(Invoke-RipgrepSecretScan -Pattern $Pattern)
+    }
+
+    Write-Host "Note: ripgrep (rg) not found. Falling back to the built-in secret scan."
+    return @(Invoke-NativeSecretScan -Pattern $Pattern)
+}
+
 Push-Location $projectRoot
 try {
     Test-GitMetadata
+    Invoke-CheckedCommand $venvPython -c "import sys; raise SystemExit(0 if sys.version_info >= (3, 10) else 1)"
     Test-PowerShellSyntax "setup.ps1"
     Test-PowerShellSyntax "run_daily_news.ps1"
     Test-PowerShellSyntax "register_task.ps1"
@@ -113,22 +197,10 @@ try {
     Invoke-CheckedCommand $venvPython "src\main.py" --check-config
 
     $secretPattern = "sk-[A-Za-z0-9]{20,}|open-apis/bot/v2/hook/[0-9a-fA-F-]{20,}|FEISHU_WEBHOOK_URL=https://open.feishu.cn/open-apis/bot/v2/hook/[0-9a-fA-F-]{20,}"
-    $secretMatches = & rg --hidden -n `
-        --glob "!.env" `
-        --glob "!.env.local" `
-        --glob "!.env.*.local" `
-        --glob "!.git/**" `
-        --glob "!.venv/**" `
-        --glob "!**/__pycache__/**" `
-        --glob "!*.pyc" `
-        --glob "!*.log" `
-        $secretPattern
-    if ($LASTEXITCODE -eq 0) {
-        $secretMatches
+    $secretMatches = Find-CommittedSecrets -Pattern $secretPattern
+    if ($secretMatches.Count -gt 0) {
+        $secretMatches | ForEach-Object { Write-Host $_ }
         throw "Sensitive value scan found possible committed secrets."
-    }
-    if ($LASTEXITCODE -ne 1) {
-        throw "Sensitive value scan failed."
     }
 
     if (-not $SkipNetwork) {

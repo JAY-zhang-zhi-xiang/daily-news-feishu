@@ -6,3 +6,18 @@ __pycache__/
 *.py[cod]
 *.log
 news.log
+data/
+
+# Python build artifacts (created by pip install . / build)
+build/
+dist/
+*.egg-info/
+
+# Coverage artifacts
+.coverage
+.coverage.*
+htmlcov/
+coverage.xml
+
+# Local agent/workspace state (not part of the project)
+.workbuddy/

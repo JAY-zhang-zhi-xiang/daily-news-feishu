@@ -37,6 +37,10 @@ if (-not (Test-Path $venvPath)) {
 }
 
 $venvPython = Join-Path $venvPath "Scripts\\python.exe"
+& $venvPython -c "import sys; raise SystemExit(0 if sys.version_info >= (3, 10) else 1)"
+if ($LASTEXITCODE -ne 0) {
+    throw "Python 3.10 or newer is required. Recreate .venv with a supported Python version."
+}
 Invoke-CheckedCommand $venvPython -m pip install --upgrade pip
 Invoke-CheckedCommand $venvPython -m pip install -r $requirementsPath
 

@@ -1,0 +1,43 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "daily-news-feishu"
+version = "1.0.0"
+description = "抓取 RSS 新闻，用 DeepSeek 做新闻价值评分与中文解读，推送到飞书"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { file = "LICENSE" }
+dependencies = [
+    "requests>=2.32.0",
+    "feedparser>=6.0.11",
+    "python-dotenv>=1.0.1",
+]
+
+[project.optional-dependencies]
+dev = [
+    "coverage>=7.0",
+]
+
+[project.scripts]
+daily-news = "main:main"
+
+[tool.setuptools]
+package-dir = { "" = "src" }
+py-modules = ["main"]
+
+[tool.coverage.run]
+source = ["src"]
+branch = true
+
+[tool.coverage.report]
+show_missing = true
+# Floor slightly below the current level so it catches regressions without
+# failing on unrelated refactors. Raise it as coverage improves.
+fail_under = 75
+exclude_lines = [
+    "if __name__ == .__main__.:",
+    "raise NotImplementedError",
+    "if TYPE_CHECKING:",
+]
